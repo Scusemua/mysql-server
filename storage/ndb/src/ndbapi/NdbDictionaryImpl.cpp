@@ -6129,6 +6129,11 @@ NdbDictInterface::createEvent(NdbEventImpl & evnt,
   ptr[0].p = (Uint32*)m_buffer.get_data();
   ptr[0].sz = (m_buffer.length()+3) >> 2;
 
+  DBUG_PRINT("info",("Preparing to perform Dictionary Signal for event creation."));
+  DBUG_PRINT("info",("Create Event Request (RequestType=%u):", req->getRequestType()));
+  DBUG_PRINT("info",("TableID=%u, TableVersion=%u", req->getTableId(), req->getTableVersion()));
+  DBUG_PRINT("info",("EventType=%04x, EventReportFlags=%04x", req->getEventType(), req->getReportFlags()));
+
   int ret = dictSignal(&tSignal,ptr, seccnt,
 		       0, // master
 		       WAIT_CREATE_INDX_REQ,
@@ -6153,6 +6158,12 @@ NdbDictInterface::createEvent(NdbEventImpl & evnt,
   evnt.m_table_id = evntConf->getTableId();
   evnt.m_table_version = evntConf->getTableVersion();
 
+  DBUG_PRINT("info", ("Reading data from CreateEvent request now:"));
+  DBUG_PRINT("info", ("Populated EventID field with value %u.", evntConf->getEventId()));
+  DBUG_PRINT("info", ("Populated EventKey field with value %u.", evntConf->getEventKey()));
+  DBUG_PRINT("info", ("Populated TableID field with value %u.", evntConf->getTableId()));
+  DBUG_PRINT("info", ("Populated TableVersion field with value %u.", evntConf->getTableVersion()));
+
   if (getFlag) {
     evnt.m_attrListBitmask = evntConf->getAttrListBitmask();
     evnt.mi_type           = evntConf->getEventType();
@@ -6174,11 +6185,15 @@ NdbDictInterface::createEvent(NdbEventImpl & evnt,
       }
     }
   } else {
-    if ((Uint32) evnt.m_tableImpl->m_id         != evntConf->getTableId() ||
-	evnt.m_tableImpl->m_version    != evntConf->getTableVersion() ||
-	//evnt.m_attrListBitmask != evntConf->getAttrListBitmask() ||
-	evnt.mi_type           != evntConf->getEventType()) {
-      g_eventLogger->info("ERROR*************");
+    DBUG_PRINT("info",("Printing local event and eventConf from request:"));
+    DBUG_PRINT("info",("evnt.table.ID=%u, evntConf.table.ID=%u", evnt.m_tableImpl->m_id, evntConf->getTableId()));
+    DBUG_PRINT("info",("evnt.table.VERSION=%u, evntConf.table.VERSION=%u", evnt.m_tableImpl->m_version, evntConf->getTableVersion()));
+    DBUG_PRINT("info",("evnt.TYPE=%u, evntConf.EVENT_TYPE=%u", evnt.mi_type, evntConf->getEventType()));
+
+    if ((Uint32) evnt.m_tableImpl->m_id      != evntConf->getTableId() ||
+	               evnt.m_tableImpl->m_version != evntConf->getTableVersion() ||
+	               evnt.mi_type                != evntConf->getEventType()) {
+      g_eventLogger->info("***** ERROR: Inconsistency between evnt and evntConf detected *****");
       m_buffer.clear();
       m_tableData.clear();
       ERR_RETURN(getNdbError(), 1);

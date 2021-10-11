@@ -3524,7 +3524,14 @@ struct NdbApiWrapper {
     Ndb_cluster_connection__set_name
     ( Ndb_cluster_connection & obj, const char * p0 )
     {
+        fprintf(stderr, "\n\nCustom libndbclient.so (8.0.26) by Mason LEAP Lab.\n");
+        fprintf(stderr, "Setting name of NameNode connection to: %s", p0);
+
         obj.set_name(p0);
+
+        Uint16 cpu_array[1] = {0};
+        obj.set_recv_thread_cpu(cpu_array,1,0);
+        fprintf(stderr,"The CPU affinity for receiving thread set to CPU 0.\n\n");
     }
 
     static void
