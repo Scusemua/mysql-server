@@ -2219,8 +2219,12 @@ Ndb::pollEvents2(int aMillisecondNumber, Uint64 *highestQueuedEpoch)
 
   /* Look for already available events without polling transporter. */
   const int found = theEventBuffer->pollEvents(highestQueuedEpoch);
-  if (found)
+  if (found) {
+    DBUG_PRINT("info", "Found at least one event without polling the transporter.");
     return found;
+  }
+
+  DBUG_PRINT("info", "No events found in the Event Buffer. Must poll transporter.");
 
   /**
    * We need to poll the transporter, and possibly wait, to make sure

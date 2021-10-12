@@ -514,12 +514,15 @@ PollGuard::PollGuard(NdbImpl& impl)
 int PollGuard::wait_n_unlock(int wait_time, Uint32 nodeId, Uint32 state,
                              bool forceSend)
 {
+  DBUG_ENTER("PollGuard::wait_n_unlock");
+  DBUG_PRINT("info", ("Wait time = %d, Node ID = %u, State = %u", wait_time, nodeId, state));
   int ret_val;
   m_waiter->set_node(nodeId);
   m_waiter->set_state(state);
   ret_val= wait_for_input_in_loop(wait_time, forceSend);
   unlock_and_signal();
-  return ret_val;
+  //return ret_val;
+  DBUG_RETURN(ret_val);
 }
 
 int PollGuard::wait_scan(int wait_time, Uint32 nodeId, bool forceSend)
