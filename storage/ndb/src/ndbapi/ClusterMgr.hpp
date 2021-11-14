@@ -25,6 +25,7 @@
 #ifndef ClusterMgr_H
 #define ClusterMgr_H
 
+#include <NdbApi.hpp>
 #include <ndb_limits.h>
 #include <NdbThread.h>
 #include <NdbMutex.h>
@@ -139,10 +140,22 @@ public:
 
     bool processInfoSent;  // ProcessInfo Report has been sent to node
   };
+
+  struct NameNode {
+    NameNode(Uint64 deploymentNumber, Uint64 instanceId, const char* functionName);
+
+    Uint64 deploymentNumber;  // The deployment number of the associated serverless function.
+    Uint64 instanceId;        // The particular instance ID of the NameNode.
+    const char* functionName; // The name of the function in which the NameNode is running.
+  }
   
   const trp_node & getNodeInfo(NodeId) const;
   Uint32        getNoOfConnectedNodes() const;
   void          hb_received(NodeId);
+
+  // Used to update the NDB API table for NameNodes.
+  Ndb_cluster_connection *connection;
+  Ndb *myNdb;
 
   /**
    * This variable isn't protected, it's used when the last node disconnects to
@@ -159,6 +172,7 @@ private:
   Uint32        minDbVersion;
   Uint32        minApiVersion;
   Node          theNodes[MAX_NODES];
+  // NameNode      theNameNodes[MAX_NODES];
   NdbThread*    theClusterMgrThread;
 
   NdbCondition* waitForHBCond;

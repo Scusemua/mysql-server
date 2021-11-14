@@ -22,6 +22,13 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+#define APIERROR(error) \
+  { std::cout << "Error in " << __FILE__ << ", line:" << __LINE__ << ", code:" \
+              << error.code << ", msg: " << error.message << "." << std::endl; \
+  }
+
+#include <NdbApi.hpp>
+
 #include <ndb_global.h>
 #include <ndb_limits.h>
 #include <util/version.h>
@@ -101,6 +108,31 @@ ClusterMgr::ClusterMgr(TransporterFacade & _facade):
     g_eventLogger->info("Failed to register ClusterMgr! ret: %d", ret);
     abort();
   }
+
+  *connection = new Ndb_cluster_connection(connectstring);
+  int r = connection->connect(
+    5 /* retries*/,
+		3 /* delay between retries */,
+		1 /* verbose               */);
+  
+  if (r > 0)
+  {
+    DBUG_PRINT("error", ("Cluster connect failed, possibly resolved with more retries.\n"));
+  }
+  else if (r < 0)
+  {
+    DBUG_PRINT("error", ("Cluster connect failed.\n"));
+  }  
+
+  if (connection->wait_until_ready(30,30))
+  {
+    DBUG_PRINT("error", ("Cluster was not ready within 30 secs."));
+  }  
+
+  *myNdb = new Ndb(connection, "hop_bram_vm");
+
+  if (myNdb->init() == -1) APIERROR(myNdb->getNdbError());
+
   DBUG_VOID_RETURN;
 }
 
@@ -413,15 +445,15 @@ ClusterMgr::threadMain()
       trp_node & theNode = cm_node;
 
       if (!theNode.defined)
-	continue;
+	      continue;
 
       if (theNode.is_connected() == false){
-	theFacade.doConnect(nodeId);
-	continue;
+	      theFacade.doConnect(nodeId);
+	      continue;
       }
       
       if (!theNode.compatible){
-	continue;
+	      continue;
       }
       
       if (nodeId == getOwnNodeId())
@@ -440,14 +472,14 @@ ClusterMgr::threadMain()
       if (cm_node.hbCounter >= m_max_api_reg_req_interval ||
           cm_node.hbCounter >= cm_node.hbFrequency)
       {
-	/**
-	 * It is now time to send a new Heartbeat
-	 */
+        /**
+         * It is now time to send a new Heartbeat
+         */
         if (cm_node.hbCounter >= cm_node.hbFrequency)
         {
           cm_node.hbMissed++;
           cm_node.hbCounter = 0;
-	}
+	      }
 
         if (theNode.m_info.m_type != NodeInfo::DB)
           signal.theReceiversBlockNumber = API_CLUSTERMGR;
@@ -463,15 +495,16 @@ ClusterMgr::threadMain()
           /* Set flag to ensure we only send once to ourself */
           m_sent_API_REGREQ_to_myself = true;
         }
-	raw_sendSignal(&signal, nodeId);
+	      raw_sendSignal(&signal, nodeId);
       }//if
       
       if (cm_node.hbMissed == 4 && cm_node.hbFrequency > 0)
       {
+        DBUG_PRINT("warn", ("Node %d has not responded to 4 heartbeats in a row.", nodeId))
         nodeFailRep->noOfNodes++;
         NodeBitmask::set(theAllNodes, nodeId);
       }
-    }
+    }//for 
     flush_send_buffers();
     unlock();
 
@@ -619,6 +652,15 @@ ClusterMgr::trp_deliver_signal(const NdbApiSignal* sig,
 
   }
   return;
+}
+
+ClusterMgr::NameNode::NameNode(Uint64 deploymentNumber, Uint64 instanceId, const char* functionName)
+{
+  this->functionName = functionName;
+  this->deploymentNumber = deploymentNumber;
+  this->instanceId = instanceId;
+
+  DBUG_PRINT("info", ("Created NameNode with functionName=%s, deploymentNumber=%d, and instanceId=%d", functionName, deploymentNumber, instanceId))
 }
 
 ClusterMgr::Node::Node()
@@ -947,8 +989,7 @@ ClusterMgr::execAPI_REGCONF(const NdbApiSignal * signal,
   {
     if (node.m_state.m_connected_nodes.get(db_node_id))
     {
-      // Tell this nodes start clients thread that db_node_id
-      // is up and probable connectable.
+      // Tell this node's start-clients-thread that db_node_id is up and probably connectable.
       theFacade.theTransporterRegistry->indicate_node_up(db_node_id);
     }
   }
@@ -1230,8 +1271,7 @@ ClusterMgr::reportConnected(NodeId nodeId)
   assert(theNode.is_connected() == false);
 
   /**
-   * make sure the node itself is marked connected even
-   * if first API_REGCONF has not arrived
+   * make sure the node itself is marked connected even if first API_REGCONF has not arrived.
    */
   DEBUG_FPRINTF((stderr, "(%u)theNode.set_connected(true) for node: %u\n",
                          getOwnNodeId(), nodeId));
